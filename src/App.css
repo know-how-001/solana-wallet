@@ -1,0 +1,21 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+}
+
+.wallet-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+main {
+  text-align: center;
+}
