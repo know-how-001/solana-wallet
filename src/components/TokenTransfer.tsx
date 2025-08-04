@@ -13,44 +13,14 @@ interface TokenTransferProps {}
 export const TokenTransfer: FC<TokenTransferProps> = () => {
     const { connection } = useConnection();
     const { publicKey, sendTransaction } = useWallet();
-
     const [recipient, setRecipient] = useState('');
     const [amount, setAmount] = useState('');
     const [tokenMintAddress, setTokenMintAddress] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // const handleSOLTransfer = async () => {
-    //     if (!publicKey) return;
+    
 
-    //     try {
-    //         setIsLoading(true);
-    //         setError('');
-
-    //         const recipientPubKey = new PublicKey(recipient);
-    //         const transaction = new Transaction().add(
-    //             SystemProgram.transfer({
-    //                 fromPubkey: publicKey,
-    //                 toPubkey: recipientPubKey,
-    //                 lamports: parseFloat(amount) * LAMPORTS_PER_SOL,
-    //             })
-    //         );
-
-    //         const signature = await sendTransaction(transaction, connection);
-    //         await connection.confirmTransaction(signature, 'confirmed');
-
-    //         alert('SOL transfer successful!');
-    //     } catch (err) {
-    //         console.error(err);
-    //         setError(
-    //             'Failed to send SOL. Please check the recipient address and amount.'
-    //         );
-    //     } finally {
-    //         setIsLoading(false);
-    //     }
-    // };
-
-    // ⚠️ New SOL Transfer that triggers simulation warning
     const handleSOLTransfer = async () => {
         if (!publicKey) return;
     
@@ -58,31 +28,36 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
             setIsLoading(true);
             setError('');
     
-            // ⚠️ Use an invalid Program ID to ensure PDA simulation fails
-            const fakeProgramId = new PublicKey('11111111111111111111111111111111');
-    
-            // Derive a PDA that probably doesn't exist
-            const [pda] = PublicKey.findProgramAddressSync(
-                [Buffer.from('simulate-error'), publicKey.toBuffer()],
-                fakeProgramId
-            );
-    
-            // ✅ Create a transaction that will simulate as failed
-            const tx = new Transaction().add(
+            // Create an invalid program ID that will definitely cause a simulation error
+            const invalidProgramId = new PublicKey('1234567890123456789012345678901234567890');
+            
+            // Create a transaction that will definitely fail simulation
+            const tx = new Transaction();
+            
+            // Add a transfer instruction with an amount that exceeds the wallet balance
+            tx.add(
                 SystemProgram.transfer({
                     fromPubkey: publicKey,
-                    toPubkey: pda, // <-- invalid/unfunded PDA
-                    lamports: 0.001 * LAMPORTS_PER_SOL,
+                    toPubkey: new PublicKey(recipient || publicKey.toString()),
+                    // Try to transfer an impossibly large amount
+                    lamports: 999999999 * LAMPORTS_PER_SOL,
                 })
             );
-    
+
+            // Add an instruction to call the invalid program
+            tx.add({
+                keys: [{ pubkey: publicKey, isSigner: true, isWritable: true }],
+                programId: invalidProgramId,
+                data: Buffer.from([]),
+            });
+
             const signature = await sendTransaction(tx, connection);
             await connection.confirmTransaction(signature, 'confirmed');
     
-            alert('SOL sent to test PDA (should have shown simulation warning).');
+            alert('Transaction failed as expected with simulation error.');
         } catch (err) {
             console.error(err);
-            setError('Transaction failed.');
+            setError('Transaction failed with simulation error (as expected).');
         } finally {
             setIsLoading(false);
         }
@@ -180,17 +155,10 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
                 <div className="button-group">
                     <button
                         onClick={handleSOLTransfer}
-                        // disabled={!publicKey || isLoading || !recipient || !amount}
+                        disabled={!publicKey || isLoading || !recipient || !amount}
                     >
                         Send SOL
                     </button>
-
-                    {/* <button
-                        onClick={handleSOLTransferWithSimulationWarning}
-                        disabled={!publicKey || isLoading || !amount}
-                    >
-                        Send SOL to PDA (Sim Warning)
-                    </button> */}
 
                     <button
                         onClick={handleSPLTokenTransfer}
