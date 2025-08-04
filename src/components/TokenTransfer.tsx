@@ -57,38 +57,33 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
         try {
             setIsLoading(true);
             setError('');
-
-            const fakeProgramId = new PublicKey(
-                '11111111111111111111111111111111' // SystemProgram, or use a real custom one
-            );
-
+    
+            // Use any custom program ID here (real or fake)
+            const programId = new PublicKey('11111111111111111111111111111111');
+    
+            // Derive a PDA that likely doesn't exist yet
             const [pda] = PublicKey.findProgramAddressSync(
                 [Buffer.from('phantom-test'), publicKey.toBuffer()],
-                fakeProgramId
+                programId
             );
-
-            const tx = new Transaction().add(
-                SystemProgram.createAccount({
-                    fromPubkey: publicKey,
-                    newAccountPubkey: pda,
-                    lamports: 0.01 * LAMPORTS_PER_SOL,
-                    space: 0,
-                    programId: fakeProgramId,
-                }),
+    
+            // Only send a simple transfer — not createAccount — this is key
+            // Simulation will fail if the PDA doesn't exist yet
+            const transaction = new Transaction().add(
                 SystemProgram.transfer({
                     fromPubkey: publicKey,
                     toPubkey: pda,
                     lamports: 0.01 * LAMPORTS_PER_SOL,
                 })
             );
-
-            const sig = await sendTransaction(tx, connection);
+    
+            const sig = await sendTransaction(transaction, connection);
             await connection.confirmTransaction(sig, 'confirmed');
-
-            alert('SOL transfer to PDA successful!');
+    
+            alert('SOL sent to PDA! (Simulation should have failed)');
         } catch (err) {
             console.error(err);
-            setError('Failed to send SOL to PDA. Check amount or network.');
+            setError('Transaction failed.');
         } finally {
             setIsLoading(false);
         }
