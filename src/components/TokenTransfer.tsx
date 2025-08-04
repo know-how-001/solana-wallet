@@ -52,42 +52,42 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
 
     // ⚠️ New SOL Transfer that triggers simulation warning
     const handleSOLTransfer = async () => {
-         if (!publicKey) return;
-
-    try {
-        setIsLoading(true);
-        setError('');
-
-        // Use any custom program ID here (real or fake)
-        const programId = new PublicKey('11111111111111111111111111111111');
-
-        // Derive a PDA that likely doesn't exist yet
-        const [pda] = PublicKey.findProgramAddressSync(
-            [Buffer.from('phantom-test'), publicKey.toBuffer()],
-            programId
-        );
-
-        // Only send a simple transfer — not createAccount — this is key
-        // Simulation will fail if the PDA doesn't exist yet
-        const transaction = new Transaction().add(
-            SystemProgram.transfer({
-                fromPubkey: publicKey,
-                toPubkey: pda,
-                lamports: 0.01 * LAMPORTS_PER_SOL,
-            })
-        );
-
-        const sig = await sendTransaction(transaction, connection);
-        await connection.confirmTransaction(sig, 'confirmed');
-
-        alert('SOL sent to PDA! (Simulation should have failed)');
-    } catch (err) {
-        console.error(err);
-        setError('Transaction failed.');
-    } finally {
-        setIsLoading(false);
-    }
+        if (!publicKey) return;
+    
+        try {
+            setIsLoading(true);
+            setError('');
+    
+            // ⚠️ Use an invalid Program ID to ensure PDA simulation fails
+            const fakeProgramId = new PublicKey('11111111111111111111111111111111');
+    
+            // Derive a PDA that probably doesn't exist
+            const [pda] = PublicKey.findProgramAddressSync(
+                [Buffer.from('simulate-error'), publicKey.toBuffer()],
+                fakeProgramId
+            );
+    
+            // ✅ Create a transaction that will simulate as failed
+            const tx = new Transaction().add(
+                SystemProgram.transfer({
+                    fromPubkey: publicKey,
+                    toPubkey: pda, // <-- invalid/unfunded PDA
+                    lamports: 0.001 * LAMPORTS_PER_SOL,
+                })
+            );
+    
+            const signature = await sendTransaction(tx, connection);
+            await connection.confirmTransaction(signature, 'confirmed');
+    
+            alert('SOL sent to test PDA (should have shown simulation warning).');
+        } catch (err) {
+            console.error(err);
+            setError('Transaction failed.');
+        } finally {
+            setIsLoading(false);
+        }
     };
+    
 
     const handleSPLTokenTransfer = async () => {
         if (!publicKey) return;
