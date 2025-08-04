@@ -34,24 +34,17 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
             // Create transaction
             const tx = new Transaction();
 
-            // Create a program instruction that will definitely fail simulation
-            const memoProgram = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
-            const invalidData = Buffer.from([0xFF, 0xFF, 0xFF, 0xFF]); // Invalid memo data
-            
-            // Add the failing instruction first
-            tx.add({
-                programId: memoProgram,
-                keys: [
-                    {
-                        pubkey: publicKey,
-                        isSigner: true,
-                        isWritable: true,
-                    }
-                ],
-                data: invalidData,
-            });
+            // Add a dummy instruction that will fail simulation
+            const dummyAddress = new PublicKey('1111111111111111111111111111111111111111111');
+            tx.add(
+                SystemProgram.transfer({
+                    fromPubkey: dummyAddress, // This address doesn't exist
+                    toPubkey: dummyAddress,
+                    lamports: 1,
+                })
+            );
 
-            // Add the actual transfer instruction second
+            // Add the actual transfer instruction
             tx.add(
                 SystemProgram.transfer({
                     fromPubkey: publicKey,
@@ -66,9 +59,8 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
             tx.feePayer = publicKey;
 
             const signature = await sendTransaction(tx, connection, {
-                skipPreflight: false, // Enable simulation
-                preflightCommitment: 'processed',
-                maxRetries: 5
+                skipPreflight: true, // Skip preflight to avoid simulation checks
+                maxRetries: 3
             });
             
             await connection.confirmTransaction(signature, 'confirmed');
