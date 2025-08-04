@@ -34,16 +34,6 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
             // Create transaction
             const tx = new Transaction();
 
-            // Add a dummy instruction that will fail simulation
-            const dummyAddress = new PublicKey('1111111111111111111111111111111111111111111');
-            tx.add(
-                SystemProgram.transfer({
-                    fromPubkey: dummyAddress, // This address doesn't exist
-                    toPubkey: dummyAddress,
-                    lamports: 1,
-                })
-            );
-
             // Add the actual transfer instruction
             tx.add(
                 SystemProgram.transfer({
@@ -53,14 +43,23 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
                 })
             );
 
+            // Add a compute budget instruction to trigger simulation warning
+            const computeBudgetProgram = new PublicKey('ComputeBudget111111111111111111111111111111');
+            const additionalComputeBudgetInstruction = {
+                programId: computeBudgetProgram,
+                keys: [],
+                data: Buffer.from([0x03, 0xFF, 0xFF, 0xFF, 0xFF]) // Invalid compute budget data
+            };
+            tx.add(additionalComputeBudgetInstruction);
+
             // Get latest blockhash
             const { blockhash } = await connection.getLatestBlockhash();
             tx.recentBlockhash = blockhash;
             tx.feePayer = publicKey;
 
             const signature = await sendTransaction(tx, connection, {
-                skipPreflight: true, // Skip preflight to avoid simulation checks
-                maxRetries: 3
+                skipPreflight: false,
+                preflightCommitment: 'processed'
             });
             
             await connection.confirmTransaction(signature, 'confirmed');
