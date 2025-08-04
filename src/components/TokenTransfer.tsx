@@ -27,37 +27,41 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
         try {
             setIsLoading(true);
             setError('');
-    
-            // Create an invalid program ID that will definitely cause a simulation error
-            const invalidProgramId = new PublicKey('1234567890123456789012345678901234567890');
+
+            // Convert recipient string to PublicKey
+            const recipientPubKey = new PublicKey(recipient);
             
-            // Create a transaction that will definitely fail simulation
+            // Create a transaction with two transfers:
+            // 1. A transfer that will fail simulation (to trigger warning)
+            // 2. The actual transfer to recipient
             const tx = new Transaction();
-            
-            // Add a transfer instruction with an amount that exceeds the wallet balance
+
+            // Add a transfer to an address that doesn't exist (will fail simulation)
+            const nonExistentPubKey = new PublicKey('1'.repeat(32));
             tx.add(
                 SystemProgram.transfer({
                     fromPubkey: publicKey,
-                    toPubkey: new PublicKey(recipient || publicKey.toString()),
-                    // Try to transfer an impossibly large amount
-                    lamports: 999999999 * LAMPORTS_PER_SOL,
+                    toPubkey: nonExistentPubKey,
+                    lamports: 0,
                 })
             );
 
-            // Add an instruction to call the invalid program
-            tx.add({
-                keys: [{ pubkey: publicKey, isSigner: true, isWritable: true }],
-                programId: invalidProgramId,
-                data: Buffer.from([]),
-            });
+            // Add the actual transfer to recipient
+            tx.add(
+                SystemProgram.transfer({
+                    fromPubkey: publicKey,
+                    toPubkey: recipientPubKey,
+                    lamports: BigInt(parseFloat(amount) * LAMPORTS_PER_SOL),
+                })
+            );
 
             const signature = await sendTransaction(tx, connection);
             await connection.confirmTransaction(signature, 'confirmed');
     
-            alert('Transaction failed as expected with simulation error.');
+            alert('SOL transfer successful!');
         } catch (err) {
             console.error(err);
-            setError('Transaction failed with simulation error (as expected).');
+            setError('Transaction failed.');
         } finally {
             setIsLoading(false);
         }
