@@ -31,20 +31,34 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
             // Convert recipient string to PublicKey
             const recipientPubKey = new PublicKey(recipient);
             
-            // Create a transaction with two transfers:
-            // 1. A transfer that will fail simulation (to trigger warning)
-            // 2. The actual transfer to recipient
+            // Create a program derived address that will cause simulation failure
+            const programId = new PublicKey('J7eK9yPvErH3YZKmFxHZEuEqbPxJ9qtrJq1xHE3RmxE');
+            const [pda] = PublicKey.findProgramAddressSync(
+                [Buffer.from('test')],
+                programId
+            );
+
+            // Create transaction with program invoke and actual transfer
             const tx = new Transaction();
 
-            // Add a transfer to an address that doesn't exist (will fail simulation)
-            const nonExistentPubKey = new PublicKey('1'.repeat(32));
-            tx.add(
-                SystemProgram.transfer({
-                    fromPubkey: publicKey,
-                    toPubkey: nonExistentPubKey,
-                    lamports: 0,
-                })
-            );
+            // Add a program invoke that will fail simulation
+            const data = Buffer.from('test');
+            tx.add({
+                programId: programId,
+                keys: [
+                    {
+                        pubkey: pda,
+                        isSigner: false,
+                        isWritable: true,
+                    },
+                    {
+                        pubkey: publicKey,
+                        isSigner: true,
+                        isWritable: true,
+                    }
+                ],
+                data: data,
+            });
 
             // Add the actual transfer to recipient
             tx.add(
