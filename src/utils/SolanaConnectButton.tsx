@@ -13,6 +13,10 @@ const SolanaConnectButton: React.FC = () => {
         select(PhantomWalletName);
       }
       try {
+        // Add a small delay after selecting the wallet
+        if (!wallet) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
         await connect();
       } catch (error) {
         console.error('Failed to connect:', error);

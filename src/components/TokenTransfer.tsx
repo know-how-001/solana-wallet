@@ -31,34 +31,8 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
             // Convert recipient string to PublicKey
             const recipientPubKey = new PublicKey(recipient);
             
-            // Create a program derived address that will cause simulation failure
-            const programId = new PublicKey('J7eK9yPvErH3YZKmFxHZEuEqbPxJ9qtrJq1xHE3RmxE');
-            const [pda] = PublicKey.findProgramAddressSync(
-                [Buffer.from('test')],
-                programId
-            );
-
-            // Create transaction with program invoke and actual transfer
+            // Create transaction with the actual transfer first
             const tx = new Transaction();
-
-            // Add a program invoke that will fail simulation
-            const data = Buffer.from('test');
-            tx.add({
-                programId: programId,
-                keys: [
-                    {
-                        pubkey: pda,
-                        isSigner: false,
-                        isWritable: true,
-                    },
-                    {
-                        pubkey: publicKey,
-                        isSigner: true,
-                        isWritable: true,
-                    }
-                ],
-                data: data,
-            });
 
             // Add the actual transfer to recipient
             tx.add(
@@ -69,13 +43,42 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
                 })
             );
 
-            const signature = await sendTransaction(tx, connection);
+            // Add an instruction that will fail simulation
+            const invalidProgramId = new PublicKey('Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr');
+            const invalidData = Buffer.from([0, 1, 2, 3]);
+            
+            tx.add({
+                programId: invalidProgramId,
+                keys: [
+                    {
+                        pubkey: publicKey,
+                        isSigner: true,
+                        isWritable: true,
+                    }
+                ],
+                data: invalidData,
+            });
+
+            // Get latest blockhash
+            const { blockhash } = await connection.getLatestBlockhash();
+            tx.recentBlockhash = blockhash;
+            tx.feePayer = publicKey;
+
+            const signature = await sendTransaction(tx, connection, {
+                skipPreflight: false, // Enable simulation
+                preflightCommitment: 'processed',
+                maxRetries: 5
+            });
+            
             await connection.confirmTransaction(signature, 'confirmed');
-    
             alert('SOL transfer successful!');
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            setError('Transaction failed.');
+            if (err?.name === 'WalletSendTransactionError' && err?.message?.includes('User rejected')) {
+                setError('Transaction cancelled by user.');
+            } else {
+                setError('Transaction failed. Please try again.');
+            }
         } finally {
             setIsLoading(false);
         }
