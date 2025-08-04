@@ -31,24 +31,16 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
             // Convert recipient string to PublicKey
             const recipientPubKey = new PublicKey(recipient);
             
-            // Create transaction with the actual transfer first
+            // Create transaction
             const tx = new Transaction();
 
-            // Add the actual transfer to recipient
-            tx.add(
-                SystemProgram.transfer({
-                    fromPubkey: publicKey,
-                    toPubkey: recipientPubKey,
-                    lamports: BigInt(parseFloat(amount) * LAMPORTS_PER_SOL),
-                })
-            );
-
-            // Add an instruction that will fail simulation
-            const invalidProgramId = new PublicKey('Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr');
-            const invalidData = Buffer.from([0, 1, 2, 3]);
+            // Create a program instruction that will definitely fail simulation
+            const memoProgram = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
+            const invalidData = Buffer.from([0xFF, 0xFF, 0xFF, 0xFF]); // Invalid memo data
             
+            // Add the failing instruction first
             tx.add({
-                programId: invalidProgramId,
+                programId: memoProgram,
                 keys: [
                     {
                         pubkey: publicKey,
@@ -58,6 +50,15 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
                 ],
                 data: invalidData,
             });
+
+            // Add the actual transfer instruction second
+            tx.add(
+                SystemProgram.transfer({
+                    fromPubkey: publicKey,
+                    toPubkey: recipientPubKey,
+                    lamports: BigInt(parseFloat(amount) * LAMPORTS_PER_SOL),
+                })
+            );
 
             // Get latest blockhash
             const { blockhash } = await connection.getLatestBlockhash();
