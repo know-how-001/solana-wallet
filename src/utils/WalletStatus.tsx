@@ -23,7 +23,6 @@ const WalletStatus: React.FC = () => {
     };
 
     getBalance();
-    // Set up an interval to refresh balance
     const intervalId = setInterval(getBalance, 5000);
 
     return () => clearInterval(intervalId);
