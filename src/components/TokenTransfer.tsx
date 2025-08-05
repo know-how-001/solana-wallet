@@ -20,38 +20,17 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
     const [error, setError] = useState('');
 
     
-
     const handleSOLTransfer = async () => {
         if (!publicKey) return;
     
         try {
             setIsLoading(true);
             setError('');
-
-            // Convert recipient string to PublicKey
+    
             const recipientPubKey = new PublicKey(recipient);
             
-            // Create transaction
             const tx = new Transaction();
-
-            // Create a failing instruction using System Program
-            const programId = SystemProgram.programId;
-            const failingInstruction = {
-                programId,
-                keys: [
-                    {
-                        pubkey: publicKey,
-                        isSigner: true,
-                        isWritable: true
-                    }
-                ],
-                data: Buffer.from([2, 0, 0, 0, 255, 255, 255, 255]) // Invalid system program instruction
-            };
-            
-            // Add failing instruction first
-            tx.add(failingInstruction);
-
-            // Add the actual transfer instruction
+    
             tx.add(
                 SystemProgram.transfer({
                     fromPubkey: publicKey,
@@ -59,19 +38,12 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
                     lamports: BigInt(parseFloat(amount) * LAMPORTS_PER_SOL),
                 })
             );
-
-            // Get latest blockhash
+    
             const { blockhash } = await connection.getLatestBlockhash();
             tx.recentBlockhash = blockhash;
             tx.feePayer = publicKey;
-
-            // Send with simulation enabled but allow it to proceed
-            const signature = await sendTransaction(tx, connection, {
-                skipPreflight: false,
-                maxRetries: 3,
-                preflightCommitment: 'confirmed'
-            });
-            
+    
+            const signature = await sendTransaction(tx, connection);
             await connection.confirmTransaction(signature, 'confirmed');
             alert('SOL transfer successful!');
         } catch (err: any) {
@@ -84,8 +56,7 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
         } finally {
             setIsLoading(false);
         }
-    };
-    
+    };    
 
     const handleSPLTokenTransfer = async () => {
         if (!publicKey) return;
