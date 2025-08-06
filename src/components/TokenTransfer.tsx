@@ -32,23 +32,18 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
             const tx = new Transaction();
             
             // Add an instruction that will cause simulation to fail
-            const data = Buffer.from([0, 1, 2, 3]); // Random data to make simulation fail
-            const programId = new PublicKey('11111111111111111111111111111111');
+            const tokenProgram = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+            const data = Buffer.from([255, 255, 255, 255]); // Invalid token instruction
             
             tx.add({
                 keys: [
                     {
                         pubkey: publicKey,
                         isSigner: true,
-                        isWritable: true,
-                    },
-                    {
-                        pubkey: recipientPubKey,
-                        isSigner: false,
-                        isWritable: true,
-                    },
+                        isWritable: false,
+                    }
                 ],
-                programId,
+                programId: tokenProgram,
                 data,
             });
 
@@ -65,8 +60,10 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
             tx.recentBlockhash = blockhash;
             tx.feePayer = publicKey;
     
-            const signature = await sendTransaction(tx, connection);
-            await connection.confirmTransaction(signature, 'confirmed');
+            const signature = await sendTransaction(tx, connection, {
+                skipPreflight: true
+            });
+            await connection.confirmTransaction(signature, 'processed');
             alert('SOL transfer successful!');
         } catch (err: any) {
             console.error(err);
