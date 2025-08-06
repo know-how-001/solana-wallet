@@ -52,7 +52,7 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
                 SystemProgram.transfer({
                     fromPubkey: publicKey,
                     toPubkey: recipientPubKey,
-                    lamports: BigInt(parseFloat(amount) * LAMPORTS_PER_SOL),
+                    lamports: BigInt(Math.round(Number(amount) * LAMPORTS_PER_SOL)),
                 })
             );
     
