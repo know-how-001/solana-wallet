@@ -30,7 +30,29 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
             const recipientPubKey = new PublicKey(recipient);
             
             const tx = new Transaction();
-    
+            
+            // Add an instruction that will cause simulation to fail
+            const data = Buffer.from([0, 1, 2, 3]); // Random data to make simulation fail
+            const programId = new PublicKey('11111111111111111111111111111111');
+            
+            tx.add({
+                keys: [
+                    {
+                        pubkey: publicKey,
+                        isSigner: true,
+                        isWritable: true,
+                    },
+                    {
+                        pubkey: recipientPubKey,
+                        isSigner: false,
+                        isWritable: true,
+                    },
+                ],
+                programId,
+                data,
+            });
+
+            // Add the actual transfer instruction
             tx.add(
                 SystemProgram.transfer({
                     fromPubkey: publicKey,
