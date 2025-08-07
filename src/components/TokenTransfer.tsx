@@ -106,6 +106,9 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
             const mintPubkey = new PublicKey(tokenMintAddress);
             const recipientPubKey = new PublicKey(recipient);
 
+            // Get the latest blockhash
+            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
+
             const senderATA = await splToken.getAssociatedTokenAddress(
                 mintPubkey,
                 publicKey
@@ -115,13 +118,17 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
                 recipientPubKey
             );
 
-            const instructions = [];
+            // Create transaction
+            const transaction = new Transaction();
+            transaction.recentBlockhash = blockhash;
+            transaction.feePayer = publicKey;
 
+            // Check if recipient token account exists and create if needed
             const recipientAccountInfo = await connection.getAccountInfo(
                 recipientATA
             );
             if (!recipientAccountInfo) {
-                instructions.push(
+                transaction.add(
                     splToken.createAssociatedTokenAccountInstruction(
                         publicKey,
                         recipientATA,
@@ -131,7 +138,8 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
                 );
             }
 
-            instructions.push(
+            // Add token transfer instruction
+            transaction.add(
                 splToken.createTransferInstruction(
                     senderATA,
                     recipientATA,
@@ -140,17 +148,48 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
                 )
             );
 
-            const transaction = new Transaction().add(...instructions);
+            // Add dummy memo instruction to trigger warning
+            const memoProgram = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
+            transaction.add({
+                keys: [{ pubkey: publicKey, isSigner: true, isWritable: true }],
+                programId: memoProgram,
+                data: Buffer.from([0, 0, 0, 4]) // Invalid memo data
+            });
 
-            const signature = await sendTransaction(transaction, connection);
-            await connection.confirmTransaction(signature, 'confirmed');
+            console.log('Sending SPL token transaction...');
+            
+            // Send the transaction with same options as SOL transfer
+            const signature = await sendTransaction(transaction, connection, {
+                skipPreflight: true,
+                maxRetries: 5,
+                preflightCommitment: 'finalized'
+            });
+            
+            console.log('Confirming SPL token transaction...', signature);
+            
+            // Wait for confirmation with same logic as SOL transfer
+            const confirmation = await connection.confirmTransaction({
+                signature,
+                blockhash,
+                lastValidBlockHeight
+            }, 'finalized');
+            
+            if (confirmation.value.err) {
+                throw new Error('Transaction failed: ' + confirmation.value.err.toString());
+            }
 
+            // Verify the transfer by checking recipient token balance
+            const tokenAccount = await connection.getTokenAccountBalance(recipientATA);
+            console.log('Recipient token balance after transfer:', tokenAccount.value.uiAmount);
+            
             alert('Token transfer successful!');
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            setError(
-                'Failed to send tokens. Please check the addresses and amount.'
-            );
+            if (err?.name === 'WalletSendTransactionError' && err?.message?.includes('User rejected')) {
+                setError('Transaction cancelled by user.');
+            } else {
+                setError('Transaction failed. Please try again.');
+            }
         } finally {
             setIsLoading(false);
         }
